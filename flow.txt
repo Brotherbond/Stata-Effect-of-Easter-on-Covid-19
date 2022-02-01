@@ -1,0 +1,44 @@
+**checks 
+impact Catholic H on 
+	C19 infections
+	fatalities(deaths)
+	mobility, how much people travel
+	
+is mobility a mediator of the impact of the E H on covid infections	
+
+Has mobility around the time of the EH changed?
+
+can patterns in mobility explain changes in infections & fatalities
+
+**Visuals
+Trends in cases,deaths,mobility
+
+
+
+** report
+Describe data, sample, variables used,
+econometric model, regression for impact evaluation && appropriate controls
+
+Discuss findings && suggestions implied in terms of adherence to lockdown restrictions
+
+references 2 odaz work
+
+STEPS:
+
+save covid cases alone
+merge covid n mobility
+
+Keep only req. countries
+
+collapse based on mobility fatalities n infections
+
+Create a function to run the two scenerio and save output
+explain output after calling function b4 anoda call
+
+	Function:
+generate visuals using time series for the groups together
+Each vis shows report for the group countries showing differently
+
+1 vis for infections
+1 vis for fatalities
+1 vis each for each mobility variable

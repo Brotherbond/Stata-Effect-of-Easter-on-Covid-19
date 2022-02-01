@@ -1,0 +1,732 @@
+-------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\User\Downloads\Assignment\Covid\covidLog.log
+  log type:  text
+ opened on:  20 Jan 2022, 11:41:51
+
+. ls
+  <dir>   1/20/22 11:41  .                 
+  <dir>   1/20/22 11:41  ..                
+  14.3k   1/20/22 11:38  CovidDo.do        
+   0.0k   1/20/22 11:41  covidLog.log      
+ 782.0M   1/16/22 17:07  Global_Mobility_Report.csv
+1968.6M   1/20/22 10:24  Global_Mobility_Report.dta
+  33.6k   1/20/22  5:11  Graph.gph         
+  <dir>   1/20/22 10:53  graphs            
+ 128.6M   1/20/22 10:24  mergedDataset.dta 
+ 375.0k   1/20/22 10:24  mergedDatasetWithoutStringColumns.dta
+  36.9M   1/14/22  6:59  owid-covid-data.csv
+  44.0M   1/17/22 23:23  owid-covid-data.dta
+ 168.5k   1/20/22  3:59  processedDataset.dta
+
+. 
+. 
+. import delimited "Global_Mobility_Report.csv", clear
+(encoding automatically selected: ISO-8859-1)
+(15 vars, 8,391,198 obs)
+
+. duplicates report
+
+Duplicates in terms of all variables
+
+--------------------------------------
+   Copies | Observations       Surplus
+----------+---------------------------
+        1 |      8391198             0
+--------------------------------------
+
+. browse
+
+. save "Global_Mobility_Report.dta", replace
+file Global_Mobility_Report.dta saved
+
+. 
+. 
+. import delimited "owid-covid-data.csv", clear 
+(encoding automatically selected: ISO-8859-1)
+(67 vars, 137,172 obs)
+
+. duplicates report
+
+Duplicates in terms of all variables
+
+--------------------------------------
+   Copies | Observations       Surplus
+----------+---------------------------
+        1 |       137172             0
+--------------------------------------
+
+. 
+. browse
+
+. *filter by continent => Europe
+. keep if strmatch(continent, "*Europe*")==1 & regexm(date, "2020-0[2-6]" )
+(131,218 observations deleted)
+
+. * for consistency sake
+. rename location country_region
+
+. 
+. *Orthodox = ["Moldova", "Greece", "Poland", "Czech", "Serbia", "Romania", "Ukraine", "Bulgaria"
+> , "Belarus", "Russia"]
+. *Catholics = ["Croatia", "Austria", "Belgium", "France", "Germany", "Italy", "Spain", "Switzerl
+> and","Portugal","United Kingdom"]
+. * Vatican is not selected because there are no records on mobility report
+. keep if regexm(country_region, "Moldova|Greece|Poland|Czech|Serbia|Romania|Ukraine|Bulgaria|Bel
+> arus|Russia|Croatia|Austria|Belgium|France|Germany|Italy|Spain|Switzerland|Portugal|United King
+> dom")
+(3,288 observations deleted)
+
+. 
+. sort country_region date
+
+. count
+  2,666
+
+. * filter to remain the chosen countries
+. 
+. *merging the using dataset, mobility report, into the master dataset, Covid statistics data
+. merge 1:m country_region date using "Global_Mobility_Report.dta",
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                     8,146,351
+        from master                       144  (_merge==1)
+        from using                  8,146,207  (_merge==2)
+
+    Matched                           244,991  (_merge==3)
+    -----------------------------------------
+
+. 
+. *keep merged results only
+. keep if _merge==3
+(8,146,351 observations deleted)
+
+. * _merge is no longer useful hence drop it
+. drop _merge
+
+. duplicates report
+
+Duplicates in terms of all variables
+
+--------------------------------------
+   Copies | Observations       Surplus
+----------+---------------------------
+        1 |       244991             0
+--------------------------------------
+
+. count
+  244,991
+
+. * there are no duplicates but sub_region values exist
+. * the selected countries have been merged using their covid cases and mobility results
+. * checking if all the countries selected are showing
+. tab country_region
+
+                  country_region |      Freq.     Percent        Cum.
+---------------------------------+-----------------------------------
+                         Austria |     12,155        4.96        4.96
+                         Belarus |        124        0.05        5.01
+                         Belgium |      1,918        0.78        5.79
+                        Bulgaria |     12,251        5.00       10.80
+                         Croatia |      2,792        1.14       11.94
+                         Czechia |     11,252        4.59       16.53
+                          France |     15,070        6.15       22.68
+                         Germany |      2,329        0.95       23.63
+                          Greece |      1,024        0.42       24.05
+                           Italy |     17,399        7.10       31.15
+                         Moldova |        115        0.05       31.20
+                          Poland |     44,871       18.32       49.51
+                        Portugal |     22,406        9.15       58.66
+                         Romania |     29,232       11.93       70.59
+                          Russia |      2,329        0.95       71.54
+                          Serbia |        166        0.07       71.61
+                           Spain |      8,631        3.52       75.13
+                     Switzerland |      3,393        1.38       76.52
+                         Ukraine |        240        0.10       76.61
+                  United Kingdom |     57,294       23.39      100.00
+---------------------------------+-----------------------------------
+                           Total |    244,991      100.00
+
+. 
+. browse
+
+. * renaming columns from mobility report dataset
+. rename (retail_and_recreation_percent_ch grocery_and_pharmacy_percent_cha parks_percent_change_
+> from_baseli transit_stations_percent_change_ workplaces_percent_change_from_b residential_perce
+> nt_change_from_) (retail_and_recreation_percent grocery_and_pharmacy_percent parks_percent tran
+> sit_stations_percent workplaces_percent residential_percent)
+
+. 
+. save "mergedDataset.dta", replace
+file mergedDataset.dta saved
+
+. *use "mergedDataset.dta", clear
+. 
+. *Splitting out the date segments
+. *generating a date variable that can be used with time-series features
+. gen convertedDate = date(date, "YMD")
+
+. format convertedDate  %tdNN/DD/CCYY
+
+. gen day = day(convertedDate)
+
+. gen week = week(convertedDate)
+
+. gen month = month(convertedDate)
+
+. 
+. *there are several observations for some countries from the mobility report on the same date
+. *list date convertedDate if convertedDate==date("2020-04-26", "YMD"), abbreviate(13)
+. 
+. *using collapse to aggregate the data by date, keeping the numerical columns in the dataset
+. 
+. *collapse (sum) total_cases new_cases new_cases_smoothed total_deaths new_deaths new_deaths_smo
+> othed total_cases_per_million new_cases_per_million new_cases_smoothed_per_million total_deaths
+> _per_million new_deaths_per_million new_deaths_smoothed_per_million reproduction_rate icu_patie
+> nts icu_patients_per_million hosp_patients hosp_patients_per_million weekly_icu_admissions week
+> ly_icu_admissions_per_millio weekly_hosp_admissions weekly_hosp_admissions_per_milli new_tests 
+> total_tests total_tests_per_thousand new_tests_per_thousand new_tests_smoothed new_tests_smooth
+> ed_per_thousand positive_rate tests_per_case stringency_index population population_density med
+> ian_age aged_65_older aged_70_older gdp_per_capita extreme_poverty cardiovasc_death_rate diabet
+> es_prevalence female_smokers male_smokers handwashing_facilities hospital_beds_per_thousand lif
+> e_expectancy human_development_index excess_mortality_cumulative_abso excess_mortality_cumulati
+> ve excess_mortality excess_mortality_cumulative_per_ retail_and_recreation_percent grocery_and_
+> pharmacy_percent parks_percent transit_stations_percent workplaces_percent residential_percent 
+> day week month , by (convertedDate country_region)
+. 
+. 
+. collapse (sum) total_cases new_cases total_deaths new_deaths total_cases_per_million new_cases_
+> per_million total_deaths_per_million new_deaths_per_million retail_and_recreation_percent groce
+> ry_and_pharmacy_percent parks_percent transit_stations_percent workplaces_percent residential_p
+> ercent, by (convertedDate country_region)
+
+. 
+. 
+. save "mergedDatasetWithoutStringColumns.dta", replace
+file mergedDatasetWithoutStringColumns.dta saved
+
+. *use "mergedDatasetWithoutStringColumns.dta", clear
+. 
+. 
+. *function starts ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+> ++++++++++++++++++
+. capture program drop multipleGraphFunction
+
+. program define multipleGraphFunction, rclass
+  1. 
+. *use "mergedDatasetWithoutStringColumns.dta", clear
+. *encoding country_region as country
+. encode country_region, gen(country)
+  2. label list country
+  3. 
+. *converting convertedDate time-series 
+. tsset country convertedDate, daily
+  4. 
+. * keeping only columns of interest
+. keep country total_cases new_cases total_deaths new_deaths total_cases_per_million new_cases_pe
+> r_million total_deaths_per_million new_deaths_per_million retail_and_recreation_percent grocery
+> _and_pharmacy_percent parks_percent transit_stations_percent workplaces_percent residential_per
+> cent convertedDate
+  5. 
+. *reshaping to accomodate the countries of interest when plotting the countries on the same time
+> -series graphs
+. *convertedDate gives the duration under study, country
+. reshape wide total_cases new_cases total_deaths new_deaths total_cases_per_million new_cases_pe
+> r_million total_deaths_per_million new_deaths_per_million retail_and_recreation_percent grocery
+> _and_pharmacy_percent parks_percent transit_stations_percent workplaces_percent residential_per
+> cent, i(convertedDate) j(country)
+  6. 
+. * checking infections, death distribution
+. twoway (tsline total_cases1) (tsline total_cases2) (tsline total_cases3) (tsline total_cases4) 
+> (tsline total_cases5) (tsline total_cases6) (tsline total_cases7) (tsline total_cases8) (tsline
+>  total_cases9) (tsline total_cases10)
+  7. twoway (tsline new_cases1) (tsline new_cases2) (tsline new_cases3) (tsline new_cases4) (tsli
+> ne new_cases5) (tsline new_cases6) (tsline new_cases7) (tsline new_cases8) (tsline new_cases9) 
+> (tsline new_cases10)
+  8. twoway (tsline total_deaths1) (tsline total_deaths2) (tsline total_deaths3) (tsline total_de
+> aths4) (tsline total_deaths5) (tsline total_deaths6) (tsline total_deaths7) (tsline total_death
+> s8) (tsline total_deaths9) (tsline total_deaths10)
+  9. twoway (tsline new_deaths1) (tsline new_deaths2) (tsline new_deaths3) (tsline new_deaths4) (
+> tsline new_deaths5) (tsline new_deaths6) (tsline new_deaths7) (tsline new_deaths8) (tsline new_
+> deaths9) (tsline new_deaths10)
+ 10. 
+. *checking out mobility during the period
+. twoway (tsline retail_and_recreation_percent1) (tsline retail_and_recreation_percent2) (tsline 
+> retail_and_recreation_percent3) (tsline retail_and_recreation_percent4) (tsline retail_and_recr
+> eation_percent5) (tsline retail_and_recreation_percent6) (tsline retail_and_recreation_percent7
+> ) (tsline retail_and_recreation_percent8) (tsline retail_and_recreation_percent9) (tsline retai
+> l_and_recreation_percent10)
+ 11. twoway (tsline grocery_and_pharmacy_percent1) (tsline grocery_and_pharmacy_percent2) (tsline
+>  grocery_and_pharmacy_percent3) (tsline grocery_and_pharmacy_percent4) (tsline grocery_and_phar
+> macy_percent5) (tsline grocery_and_pharmacy_percent6) (tsline grocery_and_pharmacy_percent7) (t
+> sline grocery_and_pharmacy_percent8) (tsline grocery_and_pharmacy_percent9) (tsline grocery_and
+> _pharmacy_percent10)
+ 12. twoway (tsline parks_percent1) (tsline parks_percent2) (tsline parks_percent3) (tsline parks
+> _percent4) (tsline parks_percent5) (tsline parks_percent6) (tsline parks_percent7) (tsline park
+> s_percent8) (tsline parks_percent9) (tsline parks_percent10)
+ 13. twoway (tsline transit_stations_percent1) (tsline transit_stations_percent2) (tsline transit
+> _stations_percent3) (tsline transit_stations_percent4) (tsline transit_stations_percent5) (tsli
+> ne transit_stations_percent6) (tsline transit_stations_percent7) (tsline transit_stations_perce
+> nt8) (tsline transit_stations_percent9) (tsline transit_stations_percent10)
+ 14. twoway (tsline workplaces_percent1) (tsline workplaces_percent2) (tsline workplaces_percent3
+> ) (tsline workplaces_percent4) (tsline workplaces_percent5) (tsline workplaces_percent6) (tslin
+> e workplaces_percent7) (tsline workplaces_percent8) (tsline workplaces_percent9) (tsline workpl
+> aces_percent10)
+ 15. twoway (tsline residential_percent1) (tsline residential_percent2) (tsline residential_perce
+> nt3) (tsline residential_percent4) (tsline residential_percent5) (tsline residential_percent6) 
+> (tsline residential_percent7) (tsline residential_percent8) (tsline residential_percent9) (tsli
+> ne residential_percent10)
+ 16. 
+. *graph save "Graph" "graph.gph"
+. end
+
+. 
+. *NB the visuals from the multipleGraphFunction were not saved just included
+. *function ends ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+> ++++++++++++++++
+. 
+. 
+. *function calling for Catholics group
+. use "mergedDatasetWithoutStringColumns.dta", clear
+
+. keep if regexm(country_region, "Croatia|Austria|Belgium|France|Germany|Italy|Spain|Switzerland|
+> Portugal|United Kingdom")
+(1,191 observations deleted)
+
+. multipleGraphFunction
+country:
+           1 Austria
+           2 Belgium
+           3 Croatia
+           4 France
+           5 Germany
+           6 Italy
+           7 Portugal
+           8 Spain
+           9 Switzerland
+          10 United Kingdom
+
+Panel variable: country (unbalanced)
+ Time variable: convertedDate, 02/15/2020 to 06/30/2020, but with gaps
+         Delta: 1 day
+(j = 1 2 3 4 5 6 7 8 9 10)
+
+Data                               Long   ->   Wide
+-----------------------------------------------------------------------------
+Number of observations            1,331   ->   137         
+Number of variables                  16   ->   141         
+j variable (10 values)          country   ->   (dropped)
+xij variables:
+                            total_cases   ->   total_cases1 total_cases2 ... total_cases10
+                              new_cases   ->   new_cases1 new_cases2 ... new_cases10
+                           total_deaths   ->   total_deaths1 total_deaths2 ... total_deaths10
+                             new_deaths   ->   new_deaths1 new_deaths2 ... new_deaths10
+                total_cases_per_million   ->   total_cases_per_million1 total_cases_per_million2 
+> ... total_cases_per_million10
+                  new_cases_per_million   ->   new_cases_per_million1 new_cases_per_million2 ... 
+> new_cases_per_million10
+               total_deaths_per_million   ->   total_deaths_per_million1 total_deaths_per_million
+> 2 ... total_deaths_per_million10
+                 new_deaths_per_million   ->   new_deaths_per_million1 new_deaths_per_million2 ..
+> . new_deaths_per_million10
+          retail_and_recreation_percent   ->   retail_and_recreation_percent1 retail_and_recreati
+> on_percent2 ... retail_and_recreation_percent10
+           grocery_and_pharmacy_percent   ->   grocery_and_pharmacy_percent1 grocery_and_pharmacy
+> _percent2 ... grocery_and_pharmacy_percent10
+                          parks_percent   ->   parks_percent1 parks_percent2 ... parks_percent10
+               transit_stations_percent   ->   transit_stations_percent1 transit_stations_percent
+> 2 ... transit_stations_percent10
+                     workplaces_percent   ->   workplaces_percent1 workplaces_percent2 ... workpl
+> aces_percent10
+                    residential_percent   ->   residential_percent1 residential_percent2 ... resi
+> dential_percent10
+-----------------------------------------------------------------------------
+
+. 
+. *doing aggregate
+. use "mergedDatasetWithoutStringColumns.dta", clear
+
+. keep if regexm(country_region, "Croatia|Austria|Belgium|France|Germany|Italy|Spain|Switzerland|
+> Portugal|United Kingdom")
+(1,191 observations deleted)
+
+. collapse (sum) total_cases new_cases total_deaths new_deaths total_cases_per_million new_cases_
+> per_million total_deaths_per_million new_deaths_per_million retail_and_recreation_percent groce
+> ry_and_pharmacy_percent parks_percent transit_stations_percent workplaces_percent residential_p
+> ercent, by (convertedDate)
+
+. tsset convertedDate, daily
+
+Time variable: convertedDate, 02/15/2020 to 06/30/2020
+        Delta: 1 day
+
+. twoway (tsline total_cases)  ,title(COVID-19 Cases) subtitle("(total_cases_Catholics)")
+
+. graph save "Graph" "graphs\total_cases_Catholics.gph", replace
+file graphs\total_cases_Catholics.gph saved
+
+. twoway (tsline new_cases) ,title(COVID-19 Cases) subtitle("(new_cases_Catholics)")
+
+. graph save "Graph" "graphs\new_cases_Catholics.gph", replace
+file graphs\new_cases_Catholics.gph saved
+
+. twoway (tsline new_deaths) ,title(COVID-19 Cases) subtitle("(new_deaths_Catholics)")
+
+. graph save "Graph" "graphs\new_deaths_Catholics.gph", replace
+file graphs\new_deaths_Catholics.gph saved
+
+. twoway (tsline retail_and_recreation_percent) ,title(COVID-19 Cases) subtitle("(retail_and_recr
+> eation_percent_Catholics)")
+
+. graph save "Graph" "graphs\retail_and_recreation_percent_Catholics.gph", replace
+file graphs\retail_and_recreation_percent_Catholics.gph saved
+
+. twoway (tsline grocery_and_pharmacy_percent) ,title(COVID-19 Cases) subtitle("(grocery_and_phar
+> macy_percent_Catholics)")
+
+. graph save "Graph" "graphs\grocery_and_pharmacy_percent_Catholics.gph", replace
+file graphs\grocery_and_pharmacy_percent_Catholics.gph saved
+
+. twoway (tsline parks_percent) ,title(COVID-19 Cases) subtitle("(parks_percent_Catholics)")
+
+. graph save "Graph" "graphs\parks_percent_Catholics.gph", replace
+file graphs\parks_percent_Catholics.gph saved
+
+. twoway (tsline transit_stations_percent) ,title(COVID-19 Cases) subtitle("(transit_stations_per
+> cent_Catholics)")
+
+. graph save "Graph" "graphs\transit_stations_percent_Catholics.gph", replace
+file graphs\transit_stations_percent_Catholics.gph saved
+
+. twoway (tsline workplaces_percent) ,title(COVID-19 Cases) subtitle("(workplaces_percent_Catholi
+> cs)")
+
+. graph save "Graph" "graphs\workplaces_percent_Catholics.gph", replace
+file graphs\workplaces_percent_Catholics.gph saved
+
+. twoway (tsline residential_percent) ,title(COVID-19 Cases) subtitle("(residential_percent_Catho
+> lics)")
+
+. graph save "Graph" "graphs\residential_percent_Catholics.gph", replace
+file graphs\residential_percent_Catholics.gph saved
+
+. 
+. *Checking regression for the catholics variables
+. * R-squared and F = 0
+. regress total_cases  
+
+      Source |       SS           df       MS      Number of obs   =       137
+-------------+----------------------------------   F(0, 136)       =      0.00
+       Model |           0         0           .   Prob > F        =         .
+    Residual |  8.3553e+17       136  6.1436e+15   R-squared       =    0.0000
+-------------+----------------------------------   Adj R-squared   =    0.0000
+       Total |  8.3553e+17       136  6.1436e+15   Root MSE        =    7.8e+07
+
+------------------------------------------------------------------------------
+ total_cases | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+       _cons |   1.05e+08    6696536    15.74   0.000     9.21e+07    1.19e+08
+------------------------------------------------------------------------------
+
+. * R-squared =  0.0141 and F = 0.96
+. regress total_cases new_cases new_deaths
+
+      Source |       SS           df       MS      Number of obs   =       137
+-------------+----------------------------------   F(2, 134)       =      0.96
+       Model |  1.1763e+16         2  5.8813e+15   Prob > F        =    0.3868
+    Residual |  8.2376e+17       134  6.1475e+15   R-squared       =    0.0141
+-------------+----------------------------------   Adj R-squared   =   -0.0006
+       Total |  8.3553e+17       136  6.1436e+15   Root MSE        =    7.8e+07
+
+------------------------------------------------------------------------------
+ total_cases | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+   new_cases |  -12.56222   9.315065    -1.35   0.180     -30.9858    5.861351
+  new_deaths |   77.94108   59.74823     1.30   0.194    -40.23051    196.1127
+       _cons |   1.09e+08    9943006    10.91   0.000     8.88e+07    1.28e+08
+------------------------------------------------------------------------------
+
+. * R-squared =   0.2920 and F =  13.61
+. regress total_cases new_cases new_deaths retail_and_recreation_percent grocery_and_pharmacy_per
+> cent
+
+      Source |       SS           df       MS      Number of obs   =       137
+-------------+----------------------------------   F(4, 132)       =     13.61
+       Model |  2.4397e+17         4  6.0993e+16   Prob > F        =    0.0000
+    Residual |  5.9155e+17       132  4.4815e+15   R-squared       =    0.2920
+-------------+----------------------------------   Adj R-squared   =    0.2705
+       Total |  8.3553e+17       136  6.1436e+15   Root MSE        =    6.7e+07
+
+-----------------------------------------------------------------------------------------------
+                  total_cases | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+------------------------------+----------------------------------------------------------------
+                    new_cases |  -35.73317   9.359179    -3.82   0.000    -54.24655   -17.21979
+                   new_deaths |   -52.1294   54.13606    -0.96   0.337    -159.2159    54.95709
+retail_and_recreation_percent |  -3595.435   568.8152    -6.32   0.000    -4720.607   -2470.262
+ grocery_and_pharmacy_percent |    2052.95    910.191     2.26   0.026     252.5027    3853.398
+                        _cons |   4.51e+07   1.26e+07     3.58   0.000     2.02e+07    7.01e+07
+-----------------------------------------------------------------------------------------------
+
+. * R-squared =   0.8112 and F = 68.74
+. regress total_cases new_cases new_deaths retail_and_recreation_percent grocery_and_pharmacy_per
+> cent parks_percent transit_stations_percent workplaces_percent residential_percent
+
+      Source |       SS           df       MS      Number of obs   =       137
+-------------+----------------------------------   F(8, 128)       =     68.74
+       Model |  6.7777e+17         8  8.4722e+16   Prob > F        =    0.0000
+    Residual |  1.5775e+17       128  1.2324e+15   R-squared       =    0.8112
+-------------+----------------------------------   Adj R-squared   =    0.7994
+       Total |  8.3553e+17       136  6.1436e+15   Root MSE        =    3.5e+07
+
+-----------------------------------------------------------------------------------------------
+                  total_cases | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+------------------------------+----------------------------------------------------------------
+                    new_cases |  -17.63236   5.380304    -3.28   0.001    -28.27821   -6.986511
+                   new_deaths |   86.01202   31.94582     2.69   0.008     22.80176    149.2223
+retail_and_recreation_percent |   1606.641   1104.615     1.45   0.148    -579.0298    3792.311
+ grocery_and_pharmacy_percent |  -677.0215   732.4696    -0.92   0.357    -2126.338    772.2948
+                parks_percent |   3051.388    186.834    16.33   0.000     2681.705    3421.071
+     transit_stations_percent |  -7032.471   1712.846    -4.11   0.000    -10421.63   -3643.313
+           workplaces_percent |   1401.436    913.634     1.53   0.128    -406.3451    3209.217
+          residential_percent |  -2069.395   1765.909    -1.17   0.243    -5563.547    1424.757
+                        _cons |   -6776504    7310424    -0.93   0.356    -2.12e+07     7688420
+-----------------------------------------------------------------------------------------------
+
+. 
+. *++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+. *function calling for Orthodox group
+. use "mergedDatasetWithoutStringColumns.dta", clear
+
+. keep if regexm(country_region, "Moldova|Greece|Poland|Czech|Serbia|Romania|Ukraine|Bulgaria|Bel
+> arus|Russia")
+(1,331 observations deleted)
+
+. multipleGraphFunction
+country:
+           1 Belarus
+           2 Bulgaria
+           3 Czechia
+           4 Greece
+           5 Moldova
+           6 Poland
+           7 Romania
+           8 Russia
+           9 Serbia
+          10 Ukraine
+
+Panel variable: country (unbalanced)
+ Time variable: convertedDate, 02/15/2020 to 06/30/2020, but with gaps
+         Delta: 1 day
+(j = 1 2 3 4 5 6 7 8 9 10)
+
+Data                               Long   ->   Wide
+-----------------------------------------------------------------------------
+Number of observations            1,191   ->   137         
+Number of variables                  16   ->   141         
+j variable (10 values)          country   ->   (dropped)
+xij variables:
+                            total_cases   ->   total_cases1 total_cases2 ... total_cases10
+                              new_cases   ->   new_cases1 new_cases2 ... new_cases10
+                           total_deaths   ->   total_deaths1 total_deaths2 ... total_deaths10
+                             new_deaths   ->   new_deaths1 new_deaths2 ... new_deaths10
+                total_cases_per_million   ->   total_cases_per_million1 total_cases_per_million2 
+> ... total_cases_per_million10
+                  new_cases_per_million   ->   new_cases_per_million1 new_cases_per_million2 ... 
+> new_cases_per_million10
+               total_deaths_per_million   ->   total_deaths_per_million1 total_deaths_per_million
+> 2 ... total_deaths_per_million10
+                 new_deaths_per_million   ->   new_deaths_per_million1 new_deaths_per_million2 ..
+> . new_deaths_per_million10
+          retail_and_recreation_percent   ->   retail_and_recreation_percent1 retail_and_recreati
+> on_percent2 ... retail_and_recreation_percent10
+           grocery_and_pharmacy_percent   ->   grocery_and_pharmacy_percent1 grocery_and_pharmacy
+> _percent2 ... grocery_and_pharmacy_percent10
+                          parks_percent   ->   parks_percent1 parks_percent2 ... parks_percent10
+               transit_stations_percent   ->   transit_stations_percent1 transit_stations_percent
+> 2 ... transit_stations_percent10
+                     workplaces_percent   ->   workplaces_percent1 workplaces_percent2 ... workpl
+> aces_percent10
+                    residential_percent   ->   residential_percent1 residential_percent2 ... resi
+> dential_percent10
+-----------------------------------------------------------------------------
+
+. 
+. *doing aggregated graph combining the countries
+. use "mergedDatasetWithoutStringColumns.dta", clear
+
+. keep if regexm(country_region, "Moldova|Greece|Poland|Czech|Serbia|Romania|Ukraine|Bulgaria|Bel
+> arus|Russia")
+(1,331 observations deleted)
+
+. collapse (sum) total_cases new_cases total_deaths new_deaths total_cases_per_million new_cases_
+> per_million total_deaths_per_million new_deaths_per_million retail_and_recreation_percent groce
+> ry_and_pharmacy_percent parks_percent transit_stations_percent workplaces_percent residential_p
+> ercent, by (convertedDate)
+
+. tsset convertedDate, daily
+
+Time variable: convertedDate, 02/15/2020 to 06/30/2020
+        Delta: 1 day
+
+. twoway (tsline total_cases),title(COVID-19 Cases) subtitle("(total_cases_Orthodox)")
+
+. graph save "Graph" "graphs\total_cases_Orthodox.gph", replace
+file graphs\total_cases_Orthodox.gph saved
+
+. twoway (tsline new_cases),title(COVID-19 Cases) subtitle("(new_cases_Orthodox)")
+
+. graph save "Graph" "graphs\new_cases_Orthodox.gph", replace
+file graphs\new_cases_Orthodox.gph saved
+
+. twoway (tsline new_deaths),title(COVID-19 Cases) subtitle("(new_deaths_Orthodox)")
+
+. graph save "Graph" "graphs\new_deaths_Orthodox.gph", replace
+file graphs\new_deaths_Orthodox.gph saved
+
+. twoway (tsline retail_and_recreation_percent),title(COVID-19 Cases) subtitle("(retail_and_recre
+> ation_percent_Orthodox)")
+
+. graph save "Graph" "graphs\retail_and_recreation_percent_Orthodox.gph", replace
+file graphs\retail_and_recreation_percent_Orthodox.gph saved
+
+. twoway (tsline grocery_and_pharmacy_percent),title(COVID-19 Cases) subtitle("(grocery_and_pharm
+> acy_percent_Orthodox)")
+
+. graph save "Graph" "graphs\grocery_and_pharmacy_percent_Orthodox.gph", replace
+file graphs\grocery_and_pharmacy_percent_Orthodox.gph saved
+
+. twoway (tsline parks_percent),title(COVID-19 Cases) subtitle("(parks_percent_Orthodox)")
+
+. graph save "Graph" "graphs\parks_percent_Orthodox.gph", replace
+file graphs\parks_percent_Orthodox.gph saved
+
+. twoway (tsline transit_stations_percent),title(COVID-19 Cases) subtitle("(transit_stations_perc
+> ent_Orthodox)")
+
+. graph save "Graph" "graphs\transit_stations_percent_Orthodox.gph", replace
+file graphs\transit_stations_percent_Orthodox.gph saved
+
+. twoway (tsline workplaces_percent),title(COVID-19 Cases) subtitle("(workplaces_percent_Orthodox
+> )")
+
+. graph save "Graph" "graphs\workplaces_percent_Orthodox.gph", replace
+file graphs\workplaces_percent_Orthodox.gph saved
+
+. twoway (tsline residential_percent),title(COVID-19 Cases) subtitle("(residential_percent_Orthod
+> ox)")
+
+. graph save "Graph" "graphs\residential_percent_Orthodox.gph", replace
+file graphs\residential_percent_Orthodox.gph saved
+
+. 
+. *Checking regression for the Orthodox variables
+. * R-squared and F = 0
+. regress total_cases  
+
+      Source |       SS           df       MS      Number of obs   =       137
+-------------+----------------------------------   F(0, 136)       =      0.00
+       Model |           0         0           .   Prob > F        =         .
+    Residual |  1.6512e+16       136  1.2141e+14   R-squared       =    0.0000
+-------------+----------------------------------   Adj R-squared   =    0.0000
+       Total |  1.6512e+16       136  1.2141e+14   Root MSE        =    1.1e+07
+
+------------------------------------------------------------------------------
+ total_cases | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+       _cons |   1.12e+07   941381.6    11.85   0.000      9292834    1.30e+07
+------------------------------------------------------------------------------
+
+. * R-squared =  0.6390 and F =  118.61
+. regress total_cases new_cases new_deaths
+
+      Source |       SS           df       MS      Number of obs   =       137
+-------------+----------------------------------   F(2, 134)       =    118.61
+       Model |  1.0551e+16         2  5.2757e+15   Prob > F        =    0.0000
+    Residual |  5.9602e+15       134  4.4479e+13   R-squared       =    0.6390
+-------------+----------------------------------   Adj R-squared   =    0.6336
+       Total |  1.6512e+16       136  1.2141e+14   Root MSE        =    6.7e+06
+
+------------------------------------------------------------------------------
+ total_cases | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+   new_cases |   79.48993   7.042724    11.29   0.000     65.56065    93.41921
+  new_deaths |  -634.3727   160.9346    -3.94   0.000    -952.6733   -316.0721
+       _cons |   -2118222    1053109    -2.01   0.046     -4201087   -35356.05
+------------------------------------------------------------------------------
+
+. * R-squared =   0.8592 and F =  201.36
+. regress total_cases new_cases new_deaths retail_and_recreation_percent grocery_and_pharmacy_per
+> cent
+
+      Source |       SS           df       MS      Number of obs   =       137
+-------------+----------------------------------   F(4, 132)       =    201.36
+       Model |  1.4187e+16         4  3.5467e+15   Prob > F        =    0.0000
+    Residual |  2.3250e+15       132  1.7614e+13   R-squared       =    0.8592
+-------------+----------------------------------   Adj R-squared   =    0.8549
+       Total |  1.6512e+16       136  1.2141e+14   Root MSE        =    4.2e+06
+
+-----------------------------------------------------------------------------------------------
+                  total_cases | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+------------------------------+----------------------------------------------------------------
+                    new_cases |   69.78226    4.49018    15.54   0.000     60.90024    78.66428
+                   new_deaths |    -278.78   104.2568    -2.67   0.008    -485.0102   -72.54976
+retail_and_recreation_percent |   448.6673   56.35426     7.96   0.000      337.193    560.1416
+ grocery_and_pharmacy_percent |  -99.24581   74.33289    -1.34   0.184    -246.2836    47.79199
+                        _cons |    2502343   755872.2     3.31   0.001      1007153     3997533
+-----------------------------------------------------------------------------------------------
+
+. * R-squared =  0.8848 and F =  122.89
+. regress total_cases new_cases new_deaths retail_and_recreation_percent grocery_and_pharmacy_per
+> cent parks_percent transit_stations_percent workplaces_percent residential_percent
+
+      Source |       SS           df       MS      Number of obs   =       137
+-------------+----------------------------------   F(8, 128)       =    122.89
+       Model |  1.4610e+16         8  1.8262e+15   Prob > F        =    0.0000
+    Residual |  1.9021e+15       128  1.4860e+13   R-squared       =    0.8848
+-------------+----------------------------------   Adj R-squared   =    0.8776
+       Total |  1.6512e+16       136  1.2141e+14   Root MSE        =    3.9e+06
+
+-----------------------------------------------------------------------------------------------
+                  total_cases | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+------------------------------+----------------------------------------------------------------
+                    new_cases |   52.34849   5.785664     9.05   0.000     40.90056    63.79641
+                   new_deaths |   -188.076   105.4589    -1.78   0.077    -396.7444    20.59243
+retail_and_recreation_percent |   532.9933   135.0435     3.95   0.000     265.7867    800.1999
+ grocery_and_pharmacy_percent |  -52.70026   80.87436    -0.65   0.516     -212.724    107.3235
+                parks_percent |   325.0768   79.11544     4.11   0.000     168.5334    481.6202
+     transit_stations_percent |  -514.9109   232.1101    -2.22   0.028    -974.1803   -55.64141
+           workplaces_percent |  -140.7798   69.26227    -2.03   0.044     -277.827   -3.732556
+          residential_percent |  -965.4749   259.9989    -3.71   0.000    -1479.927   -451.0226
+                        _cons |    1740090     730049     2.38   0.019     295563.8     3184617
+-----------------------------------------------------------------------------------------------
+
+. 
+end of do-file
+
+. graph use "C:\Users\User\Downloads\Assignment\Covid\graphs\new_cases_Catholics.gph"
+
+. graph use "C:\Users\User\Downloads\Assignment\Covid\graphs\new_cases_Orthodox.gph"
+
+. graph use "C:\Users\User\Downloads\Assignment\Covid\graphs\new_deaths_Catholics.gph"
+
+. graph use "C:\Users\User\Downloads\Assignment\Covid\graphs\new_deaths_Orthodox.gph"
+
+. graph use "C:\Users\User\Downloads\Assignment\Covid\graphs\parks_percent_Catholics.gph"
+
+. graph use "C:\Users\User\Downloads\Assignment\Covid\graphs\grocery_and_pharmacy_percent_Catholi
+> cs.gph"
+
+. graph use "C:\Users\User\Downloads\Assignment\Covid\graphs\residential_percent_Catholics.gph"
+
+. graph use "C:\Users\User\Downloads\Assignment\Covid\graphs\parks_percent_Catholics.gph"
+
+. graph use "C:\Users\User\Downloads\Assignment\Covid\graphs\grocery_and_pharmacy_percent_Catholi
+> cs.gph"
+
+. graph use "C:\Users\User\Downloads\Assignment\Covid\graphs\retail_and_recreation_percent_Cathol
+> ics.gph"
+
+. graph use "C:\Users\User\Downloads\Assignment\Covid\graphs\workplaces_percent_Catholics.gph"
+
+. exit, clear

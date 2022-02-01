@@ -1,0 +1,38 @@
+cd 
+set more off
+log
+codebook
+clear all
+capture log close
+browse
+count
+lookfor
+table
+tab
+tabstat
+replace
+compare
+by
+bys
+bysort
+svyset
+forvalue x = m/n {}
+foreach x in <> <> <> {}
+list 
+egen //used for function else use gen
+recode
+save
+local y = r(x)
+di `x'
+* strata
+* over
+* by()
+* stat
+* nol
+* missing
+* row
+* nofreq
+* cel
+
+func
+rowtotal
